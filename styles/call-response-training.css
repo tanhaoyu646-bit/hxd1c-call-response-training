@@ -1,0 +1,88 @@
+body[data-training-app="call-response"] .call-response-panel{
+  position:absolute;
+  z-index:22;
+  left:50%;
+  bottom:4.2%;
+  translate:-50% 0;
+  width:min(520px,48%);
+  overflow:hidden;
+  border:1px solid #72d8ff;
+  border-radius:10px;
+  background:#061927f5;
+  box-shadow:0 12px 34px #000b,inset 0 1px #ffffff12;
+}
+body[data-training-app="call-response"] .call-response-panel[hidden]{display:none}
+body[data-training-app="call-response"] .call-response-panel header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  min-height:30px;
+  padding:5px 10px;
+  border-bottom:1px solid #37789a;
+  background:#0b4d78;
+  font-size:11px;
+}
+body[data-training-app="call-response"] .call-response-panel header b{color:#fff1a2}
+body[data-training-app="call-response"] .call-response-body{padding:9px 11px 10px;text-align:center}
+body[data-training-app="call-response"] .call-response-body>p{margin:0;color:#8fd8f5;font-size:11px}
+body[data-training-app="call-response"] .call-response-body h2{margin:4px 0 8px;font-size:15px}
+body[data-training-app="call-response"] .call-response-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+body[data-training-app="call-response"] .call-response-options button{
+  min-height:38px;
+  padding:7px 9px;
+  border:1px solid #4b9fc6;
+  border-radius:7px;
+  background:#0b3654;
+  color:#f1fbff;
+  font-size:12px;
+  line-height:1.25;
+}
+body[data-training-app="call-response"] .call-response-options button:hover,
+body[data-training-app="call-response"] .call-response-options button:focus-visible{border-color:#82ecff;background:#15577b}
+body[data-training-app="call-response"] .call-response-options button.selected.correct{border-color:#63efad;background:#136342}
+body[data-training-app="call-response"] .call-response-options button.selected.wrong{border-color:#ff7b87;background:#772a34}
+body[data-training-app="call-response"] .call-response-options button:disabled{cursor:default;opacity:.72}
+body[data-training-app="call-response"] .call-response-panel.listening .call-response-options button{opacity:.42}
+body[data-training-app="call-response"] .call-clock-hotspot,
+body[data-training-app="call-response"] .call-instruments-hotspot{border:1px solid transparent;background:transparent}
+body[data-training-app="call-response"] .call-clock-hotspot:hover,
+body[data-training-app="call-response"] .call-clock-hotspot:focus-visible,
+body[data-training-app="call-response"] .call-instruments-hotspot:hover,
+body[data-training-app="call-response"] .call-instruments-hotspot:focus-visible{border-color:#74e6ff88;background:#2ad8ff18}
+body[data-training-app="call-response"] .call-response-feedback{min-height:16px;margin:7px 0 0!important;color:#fff1a2!important;font-weight:700}
+body[data-training-app="call-response"] .call-response-panel.assessment{
+  bottom:3.4%;
+  width:min(460px,42%);
+}
+body[data-training-app="call-response"] .call-response-panel.assessment .call-response-body{padding:7px 9px 8px}
+body[data-training-app="call-response"] .call-response-panel.assessment .call-response-options button{min-height:32px;padding:5px 7px;font-size:11px}
+body.call-response-frozen[data-training-app="call-response"] #overlay>*{pointer-events:none!important}
+body.call-response-frozen[data-training-app="call-response"] .stage-toolbar{pointer-events:none;opacity:.55}
+body.call-response-frozen[data-training-app="call-response"] .view-tabs,
+body.call-response-frozen[data-training-app="call-response"] .control-sidebar,
+body.call-response-frozen[data-training-app="call-response"] .smooth-training,
+body.call-response-frozen[data-training-app="call-response"] .hint{pointer-events:none}
+body.call-response-frozen[data-training-app="call-response"] #route-scene,
+body.call-response-frozen[data-training-app="call-response"] #cab,
+body.call-response-frozen[data-training-app="call-response"] #overlay{filter:saturate(.72) brightness(.82)}
+body[data-training-app="call-response"] .call-response-result-modal .result-shell{max-height:min(88vh,720px)}
+body[data-training-app="call-response"] .mode-launchers{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:11px}
+body[data-training-app="call-response"] .mode-launchers button{min-height:42px;border:1px solid #338fc1;border-radius:7px;background:#0c3150}
+body[data-training-app="call-response"] .mode-launchers button.active{border-color:#62efab;background:#126247}
+body[data-training-app="call-response"] .call-mode-note{margin:0;padding:0 12px 12px;color:#9ac6dc;font-size:11px;line-height:1.65}
+
+@media(max-width:620px), (orientation:landscape) and (max-height:620px){
+  body[data-training-app="call-response"] .call-response-panel,
+  body[data-training-app="call-response"] .call-response-panel.assessment{
+    width:min(510px,58%);
+    bottom:max(2.5%,env(safe-area-inset-bottom));
+  }
+  body[data-training-app="call-response"] .call-response-panel header{min-height:24px;padding:3px 8px;font-size:9px}
+  body[data-training-app="call-response"] .call-response-body{padding:5px 7px 6px}
+  body[data-training-app="call-response"] .call-response-body h2{margin:2px 0 5px;font-size:11px}
+  body[data-training-app="call-response"] .call-response-body>p{font-size:9px}
+  body[data-training-app="call-response"] .call-response-options{gap:4px}
+  body[data-training-app="call-response"] .call-response-options button,
+  body[data-training-app="call-response"] .call-response-panel.assessment .call-response-options button{min-height:29px;padding:4px 6px;font-size:9px}
+  body[data-training-app="call-response"] .call-response-feedback{min-height:12px;margin-top:3px!important;font-size:9px}
+}
