@@ -5,7 +5,7 @@ import {
   expectedCallResponseText,
   fullCallResponseSequence,
   getCallResponseEvent,
-} from './callResponseConfig.js';
+} from './callResponseConfig.js?rev=call-response-v3';
 
 function shuffled(values, random = Math.random) {
   const result = [...values];
@@ -25,8 +25,8 @@ function balancedRoles(count, random = Math.random) {
 function buildOptions(config, role, random = Math.random) {
   const correct = expectedCallResponseText(config, role);
   const bank = role === CALL_RESPONSE_ROLES.DRIVER
-    ? CALL_RESPONSE_TRAINING_CONFIG.driverDistractors
-    : CALL_RESPONSE_TRAINING_CONFIG.assistantDistractors;
+    ? config.driverDistractors || CALL_RESPONSE_TRAINING_CONFIG.driverDistractors
+    : config.assistantDistractors || CALL_RESPONSE_TRAINING_CONFIG.assistantDistractors;
   const distractors = shuffled([...new Set(bank.filter((item) => item !== correct))], random).slice(0, 3);
   return shuffled([correct, ...distractors], random);
 }
@@ -50,6 +50,7 @@ export function createCallResponseAttempt(random = Math.random) {
         correct: false,
         earned: 0,
         openedAtDistance: null,
+        armedAtDistance: null,
         answeredAtDistance: null,
         deadlineElapsed: null,
         answerReady: role === CALL_RESPONSE_ROLES.ASSISTANT,
@@ -113,23 +114,50 @@ export class CallResponseAssessment {
     return true;
   }
 
+  eventIsEligible(config, state, purpose = 'click') {
+    if (config.triggerKind === 'stationary') {
+      return Math.abs(Number(state.speed || 0)) <= 0.3
+        && Number(state.distance || 0) <= config.expireDistance;
+    }
+    if (config.triggerKind === 'traction-moving') {
+      return Number(state.speed || 0) >= 0.5
+        && Number(state.traction || 0) >= 1.95
+        && Number(state.distance || 0) <= config.expireDistance;
+    }
+    const start = purpose === 'teaching' ? config.teachingTriggerDistance : config.clickStartDistance;
+    return state.distance >= start && state.distance <= config.expireDistance;
+  }
+
+  eventHasExpired(config, state) {
+    if (config.triggerKind === 'stationary') {
+      return Math.abs(Number(state.speed || 0)) > 0.3 || Number(state.distance || 0) > config.expireDistance;
+    }
+    return Number(state.distance || 0) > config.expireDistance;
+  }
+
   selectTarget(targetId, state) {
     if (!state?.callResponse || state.callResponse.finished) return null;
     if (state.trainingMode !== 'assessment') return { type: 'ignored' };
     if (state.callResponse.activeEventId) return { type: 'already-open' };
-    const eligible = CALL_RESPONSE_TRAINING_CONFIG.events.find((config) => {
-      const event = state.callResponse.events[config.id];
-      return event.status === 'pending'
-        && state.distance >= config.clickStartDistance
-        && state.distance <= config.expireDistance;
-    });
-    if (!eligible) return { type: 'early-click', message: '当前尚未进入有效呼唤区间。' };
-    if (eligible.targetId !== targetId) {
-      state.callResponse.misclicks += 1;
-      state.callResponse.events[eligible.id].misclicks += 1;
-      return { type: 'wrong-target', message: `目标识别错误：当前应确认${eligible.label}。` };
+    const next = CALL_RESPONSE_TRAINING_CONFIG.events.find((config) => (
+      ['pending', 'armed'].includes(state.callResponse.events[config.id].status)
+    ));
+    if (!next || !this.eventIsEligible(next, state, 'click')) {
+      return { type: 'early-click', message: '当前尚未进入有效呼唤区间。' };
     }
-    return this.open(eligible, state);
+    const event = state.callResponse.events[next.id];
+    if (event.status === 'armed') return { type: 'already-armed', message: `${next.label}已确认，等待越过标志后呼唤。` };
+    if (next.targetId !== targetId) {
+      state.callResponse.misclicks += 1;
+      event.misclicks += 1;
+      return { type: 'wrong-target', message: `目标识别错误：当前应确认${next.label}。` };
+    }
+    if (Number.isFinite(next.deferUntilDistance) && state.distance < next.deferUntilDistance) {
+      event.status = 'armed';
+      event.armedAtDistance = state.distance;
+      return { type: 'armed', config: next, event, message: `已确认${next.label}，越过标志后再进行“闭合”呼唤。` };
+    }
+    return this.open(next, state);
   }
 
   selectSignal(signalId, state) {
@@ -167,7 +195,7 @@ export class CallResponseAssessment {
 
   markMissed(config, state) {
     const event = state.callResponse.events[config.id];
-    if (!event || !['pending', 'active'].includes(event.status)) return null;
+    if (!event || !['pending', 'active', 'armed'].includes(event.status)) return null;
     event.status = 'missed';
     event.correct = false;
     event.earned = 0;
@@ -188,15 +216,24 @@ export class CallResponseAssessment {
       return null;
     }
 
+    const armedConfig = CALL_RESPONSE_TRAINING_CONFIG.events.find((config) => (
+      state.callResponse.events[config.id].status === 'armed'
+    ));
+    if (armedConfig) {
+      if (state.distance >= armedConfig.deferUntilDistance) return this.open(armedConfig, state);
+      if (this.eventHasExpired(armedConfig, state)) return this.markMissed(armedConfig, state);
+      return null;
+    }
+
     let latest = null;
     for (const config of CALL_RESPONSE_TRAINING_CONFIG.events) {
       const event = state.callResponse.events[config.id];
       if (event.status !== 'pending') continue;
-      if (state.distance > config.expireDistance) {
+      if (this.eventHasExpired(config, state)) {
         latest = this.markMissed(config, state);
         continue;
       }
-      if (state.trainingMode === 'teaching' && state.distance >= config.teachingTriggerDistance) {
+      if (state.trainingMode === 'teaching' && this.eventIsEligible(config, state, 'teaching')) {
         return this.open(config, state);
       }
       break;

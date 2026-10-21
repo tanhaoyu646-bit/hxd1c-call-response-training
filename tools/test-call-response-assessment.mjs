@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import {
   CallResponseAssessment,
   createCallResponseAttempt,
@@ -8,30 +9,44 @@ import {
   CALL_RESPONSE_ROLES,
   CALL_RESPONSE_TRAINING_CONFIG,
   expectedCallResponseText,
+  fullCallResponseSequence,
 } from '../scripts/callResponseConfig.js';
+import { callResponseAudioFile } from '../scripts/callResponseAudio.js';
 
 const makeState = (mode) => ({
   trainingMode: mode,
   distance: 0,
   elapsed: 0,
   completed: false,
+  speed: 0,
+  traction: 0,
 });
 
 {
   const attempt = createCallResponseAttempt(() => 0.25);
   const roles = Object.values(attempt.events).map((event) => event.role);
-  assert.equal(roles.filter((role) => role === CALL_RESPONSE_ROLES.DRIVER).length, 9);
+  assert.equal(roles.filter((role) => role === CALL_RESPONSE_ROLES.DRIVER).length, 10);
   assert.equal(roles.filter((role) => role === CALL_RESPONSE_ROLES.ASSISTANT).length, 9);
   assert.equal(CALL_RESPONSE_TRAINING_CONFIG.events.reduce((total, config) => total + config.weight, 0), 100);
   assert.deepEqual(
     CALL_RESPONSE_TRAINING_CONFIG.events.filter((config) => config.targetKind === 'route-sign').map((config) => config.id),
     ['phase-no-double-panto', 'phase-power-off', 'phase-power-on'],
   );
+  assert.equal(CALL_RESPONSE_TRAINING_CONFIG.events.find((config) => config.id === '2274').aspect, 'greenYellow');
+  assert.equal(CALL_RESPONSE_TRAINING_CONFIG.events.find((config) => config.id === 'station-position').distance, 6708);
+  const throughConfigs = CALL_RESPONSE_TRAINING_CONFIG.events.filter((config) => config.targetKind === 'signal' && /^22|^23/.test(config.id));
+  assert.equal(new Set(throughConfigs.map((config) => config.driverDistractors.join('|'))).size, 5);
+  assert.equal(new Set(throughConfigs.map((config) => config.assistantDistractors.join('|'))).size, 5);
   for (const config of CALL_RESPONSE_TRAINING_CONFIG.events) {
     const event = attempt.events[config.id];
     assert.equal(event.options.length, 4);
     assert.equal(new Set(event.options).size, 4);
     assert.ok(event.options.includes(expectedCallResponseText(config, event.role)));
+    for (const line of fullCallResponseSequence(config)) {
+      const file = callResponseAudioFile(line);
+      assert.ok(file, `missing audio mapping for ${line.role}: ${line.text}`);
+      assert.ok(existsSync(new URL(`../assets/audio/call-response/${file}`, import.meta.url)), `missing audio file ${file}`);
+    }
   }
 }
 
@@ -57,6 +72,30 @@ const makeState = (mode) => ({
 {
   const state = makeState('assessment');
   const assessment = new CallResponseAssessment(state, { random: () => 0.25 });
+  state.speed = 1;
+  state.distance = 2;
+  const missed = assessment.update(state);
+  assert.equal(state.callResponse.events.departure.status, 'missed');
+  assert.equal(state.callResponse.events['departure-ready'].status, 'missed');
+  assert.equal(missed.config.id, 'departure-ready');
+  assert.equal(missed.type, 'missed');
+}
+
+{
+  const state = makeState('assessment');
+  const assessment = new CallResponseAssessment(state, { random: () => 0.25 });
+  for (const id of ['departure', 'departure-ready']) state.callResponse.events[id].status = 'correct';
+  state.distance = 80;
+  state.speed = 4;
+  state.traction = 1;
+  assert.equal(assessment.selectTarget('rear-view', state).type, 'early-click');
+  state.traction = 2;
+  assert.equal(assessment.selectTarget('rear-view', state).type, 'open');
+}
+
+{
+  const state = makeState('assessment');
+  const assessment = new CallResponseAssessment(state, { random: () => 0.25 });
   const first = CALL_RESPONSE_TRAINING_CONFIG.events[0];
   state.distance = first.clickStartDistance;
   assert.equal(assessment.selectTarget('2328', state).type, 'wrong-target');
@@ -75,7 +114,14 @@ const makeState = (mode) => ({
   const assessment = new CallResponseAssessment(state, { random: () => 0.25 });
   for (const config of CALL_RESPONSE_TRAINING_CONFIG.events) {
     state.distance = config.distance;
-    const opened = assessment.selectTarget(config.targetId, state);
+    state.speed = config.triggerKind === 'stationary' ? 0 : 20;
+    state.traction = config.triggerKind === 'traction-moving' ? 2 : 3;
+    let opened = assessment.selectTarget(config.targetId, state);
+    if (opened.type === 'armed') {
+      assert.equal(config.id, 'phase-power-on');
+      state.distance = config.deferUntilDistance;
+      opened = assessment.update(state);
+    }
     assert.equal(opened.type, 'open');
     if (opened.event.role === CALL_RESPONSE_ROLES.DRIVER) assessment.startAnswerWindow(config.id, state);
     const expected = expectedCallResponseText(config, opened.event.role);
@@ -87,7 +133,7 @@ const makeState = (mode) => ({
   assert.equal(state.completed, true);
   assert.deepEqual(scoreCallResponseAttempt(state.callResponse), {
     score: 100,
-    correct: 18,
+    correct: 19,
     wrong: 0,
     missed: 0,
     pending: 0,

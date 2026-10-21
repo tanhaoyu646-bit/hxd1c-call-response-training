@@ -1,14 +1,14 @@
 import { TrainSimulation } from './dynamics.js?rev=notch-timing-v30';
 import { getProcedure, procedureState, scoreRun } from './procedure.js?rev=notch-timing-v30';
-import { MstsRouteScene } from './mstsRouteScene.js?rev=call-response-v2';
+import { MstsRouteScene } from './mstsRouteScene.js?rev=call-response-v3';
 import { LKJ_FIELD_DEFINITIONS, LKJ_TRAINING_PARAMETERS, RUNNING_NOTICES, SIGNAL_ASPECTS, TRAIN_DYNAMICS, SMOOTH_START_TERRAINS, getSmoothStartTerrain } from './scenario.js?rev=notch-timing-v30';
 import { SCENARIOS, ROUTE_CONTEXT, getScenario, scenarioAudioPath } from './credentialScenario.js?rev=smooth-start-v19-cir-incoming-clickfix';
 import { ROUTE_TRAINING_PROFILE } from './routeTrainingProfile.js';
 import { LookoutAssessment } from './lookoutAssessment.js';
 import { LOOKOUT_TRAINING_CONFIG } from './lookoutTrainingConfig.js';
-import { CallResponseAssessment, scoreCallResponseAttempt } from './callResponseAssessment.js';
-import { CALL_RESPONSE_ROLES, CALL_RESPONSE_TRAINING_CONFIG, expectedCallResponseText, rolePrompt } from './callResponseConfig.js';
-import { playCallResponseSequence, stopCallResponseAudio } from './callResponseAudio.js';
+import { CallResponseAssessment, scoreCallResponseAttempt } from './callResponseAssessment.js?rev=call-response-v3';
+import { CALL_RESPONSE_ROLES, CALL_RESPONSE_TRAINING_CONFIG, expectedCallResponseText, rolePrompt } from './callResponseConfig.js?rev=call-response-v3';
+import { playCallResponseSequence, stopCallResponseAudio } from './callResponseAudio.js?rev=call-response-v3';
 
 const $ = (q) => document.querySelector(q);
 const sim = new TrainSimulation();
@@ -134,6 +134,7 @@ let callResponseReturnToFront=false;
 const wait=(milliseconds)=>new Promise((resolve)=>setTimeout(resolve,milliseconds));
 function closeCallResponsePanel({resume=false}={}){
   if(!IS_CALL_RESPONSE_APP)return;
+  stopCallResponseAudio();
   callResponsePanelGeneration+=1;
   const panel=$('#call-response-panel');
   if(panel){panel.hidden=true;panel.classList.remove('assessment','listening');}
@@ -155,6 +156,8 @@ function openCallResponsePanel(config,event){
   panel.querySelector('[data-call-prompt]').textContent=rolePrompt(event.role);
   const feedback=panel.querySelector('[data-call-feedback]');
   feedback.textContent='';
+  const audioButton=panel.querySelector('[data-call-audio]');
+  audioButton.hidden=true;audioButton.disabled=false;audioButton.onclick=null;
   const options=panel.querySelector('[data-call-options]');options.replaceChildren();
   event.options.forEach((text)=>{const button=document.createElement('button');button.type='button';button.textContent=text;button.dataset.callAnswer=text;button.addEventListener('click',()=>handleCallResponseAnswer(button,text));options.append(button);});
   document.body.classList.toggle('call-response-frozen',teaching);
@@ -162,13 +165,24 @@ function openCallResponsePanel(config,event){
     panel.classList.add('listening');
     options.querySelectorAll('button').forEach((button)=>{button.disabled=true;});
     feedback.textContent='先听非操纵司机呼唤，语音结束后作答。';
-    playCallResponseSequence([{role:'非操纵司机',text:config.assistantText}]).then(()=>{
+    const promptSequence=[{role:'非操纵司机',text:config.assistantText}];
+    const playPrompt=async()=>{
+      audioButton.disabled=true;
+      const played=await playCallResponseSequence(promptSequence);
       if(generation!==callResponsePanelGeneration||callResponsePanelEventId!==config.id)return;
+      if(!played){
+        audioButton.hidden=false;audioButton.disabled=false;audioButton.textContent='点击播放非操纵司机呼唤';
+        feedback.textContent='浏览器阻止了自动语音，请点击上方按钮播放后再作答。';
+        return;
+      }
       if(!callResponseAssessment.startAnswerWindow(config.id,sim.state))return;
+      audioButton.hidden=true;audioButton.disabled=false;
       panel.classList.remove('listening');
       options.querySelectorAll('button').forEach((button)=>{button.disabled=false;});
       feedback.textContent=sim.state.trainingMode==='assessment'?'请在8秒内选择操纵司机的标准应答。':'请选择操纵司机的标准应答。';
-    });
+    };
+    audioButton.onclick=playPrompt;
+    playPrompt();
   }
 }
 async function handleCallResponseAnswer(button,text){
@@ -182,12 +196,27 @@ async function handleCallResponseAnswer(button,text){
   if(result.correct)feedback.textContent=`回答正确，获得 ${result.config.weight} 分。`;
   else if(sim.state.trainingMode==='teaching')feedback.textContent=`回答错误，本题0分。标准内容：${result.expected}`;
   else feedback.textContent='回答错误，本题0分。';
+  const audioButton=panel.querySelector('[data-call-audio]');
+  audioButton.hidden=true;audioButton.disabled=false;audioButton.onclick=null;
   const audioPromise=playCallResponseSequence(result.sequence);
   if(sim.state.trainingMode==='teaching'){
-    await Promise.all([audioPromise,wait(CALL_RESPONSE_TRAINING_CONFIG.teachingFeedbackSeconds*1000)]);
+    const [played]=await Promise.all([audioPromise,wait(CALL_RESPONSE_TRAINING_CONFIG.teachingFeedbackSeconds*1000)]);
+    if(!played){
+      audioButton.hidden=false;audioButton.textContent='点击播放完整标准语音';
+      audioButton.onclick=async()=>{audioButton.disabled=true;if(await playCallResponseSequence(result.sequence))closeCallResponsePanel({resume:true});else audioButton.disabled=false;};
+      feedback.textContent+=`${feedback.textContent?' ':''}语音未自动播放，请点击上方按钮重播。`;
+      return;
+    }
     closeCallResponsePanel({resume:true});
   }else{
-    wait(650).then(()=>closeCallResponsePanel());
+    const played=await audioPromise;
+    if(!played){
+      audioButton.hidden=false;audioButton.textContent='点击播放完整标准语音';
+      audioButton.onclick=async()=>{audioButton.disabled=true;if(await playCallResponseSequence(result.sequence))closeCallResponsePanel();else audioButton.disabled=false;};
+      feedback.textContent+=`${feedback.textContent?' ':''}语音未自动播放，请点击上方按钮重播。`;
+      return;
+    }
+    await wait(650);closeCallResponsePanel();
   }
 }
 function handleCallResponseRuntimeEvent(result){
@@ -203,6 +232,7 @@ function handleCallResponseRuntimeEvent(result){
     sim.emit(result.message);
     return;
   }
+  if(result.type==='armed'){sim.emit(result.message);return;}
   if(result.type==='finished')sim.emit(`两站一区间确认呼唤训练完成，得分 ${result.summary.score} 分。`);
 }
 function selectCallResponseTarget(targetId,{silentEarly=false}={}){
@@ -210,7 +240,7 @@ function selectCallResponseTarget(targetId,{silentEarly=false}={}){
   const result=callResponseAssessment.selectTarget(targetId,sim.state);
   if(result?.type==='open')handleCallResponseRuntimeEvent(result);
   else if(result?.message&&!silentEarly)sim.emit(result.message);
-  return result?.type==='open';
+  return ['open','armed'].includes(result?.type);
 }
 const switchDefs = [
   { id:'main-breaker', label:'主断路器', type:'short', x:15.6, read:s=>s.mainBreaker, on:'合', off:'分', directional:true, initialCheck:'mainBreaker' },
@@ -1031,7 +1061,7 @@ function render(state,message='') {
     const signature=CALL_RESPONSE_TRAINING_CONFIG.events.map((config)=>`${config.id}:${attempt?.events?.[config.id]?.status||'pending'}`).join('|');
     if(procedureRoot&&procedureRoot.dataset.signature!==signature){
       procedureRoot.dataset.signature=signature;
-      procedureRoot.innerHTML=CALL_RESPONSE_TRAINING_CONFIG.events.map((config,index)=>{const event=attempt.events[config.id];const done=['correct','wrong','missed'].includes(event.status);return `<li class="${done?'done':activeId===config.id?'active':''}">${index+1}. ${config.label} · ${config.weight}分</li>`;}).join('');
+      procedureRoot.innerHTML=CALL_RESPONSE_TRAINING_CONFIG.events.map((config,index)=>{const event=attempt.events[config.id];const done=['correct','wrong','missed'].includes(event.status);return `<li class="${done?'done':activeId===config.id||event.status==='armed'?'active':''}">${index+1}. ${config.label} · ${config.weight}分</li>`;}).join('');
     }
     score=scoreCallResponseAttempt(attempt);
   }else{
@@ -1044,7 +1074,7 @@ function render(state,message='') {
   const context=state.trainingScope==='continuity'?'默认平道 · 第一闭塞分区':state.trainingScope==='smooth-only'?(state.terrainSelected?getSmoothStartTerrain(state.terrainMode).label:'未选择线路条件'):(state.scenarioSelected?scenario.label:'未选择场景');
   const blockRemaining=Math.max(0,Math.round(activeFirstBlockEndDistance(state)-state.distance));
   if(state.trainingScope==='call-response'){
-    const current=callResponseAssessment.current(state);const next=current?.config||CALL_RESPONSE_TRAINING_CONFIG.events.find((config)=>state.callResponse.events[config.id].status==='pending');
+    const current=callResponseAssessment.current(state);const next=current?.config||CALL_RESPONSE_TRAINING_CONFIG.events.find((config)=>['pending','armed'].includes(state.callResponse.events[config.id].status));
     const remaining=next?Math.max(0,Math.round(next.distance-state.distance)):Math.max(0,Math.round(CALL_RESPONSE_TRAINING_CONFIG.finishDistance-state.distance));
     const summary=scoreCallResponseAttempt(state.callResponse);const currentLabel=current?`${current.config.label}答题中`:next?`驶向${next.label}`:'驶向结算点';
     $('#status').innerHTML=`<strong>状态：</strong>${state.callResponse.finished?'训练已结算':currentLabel}<br>${state.trainingMode==='teaching'?'教学模式 · 到点冻结':'考评模式 · 运行中主动确认目标'}<br>列车管 ${state.trainPipe.toFixed(0)} kPa · 制动缸 ${state.brakeCyl.toFixed(0)} kPa<br>${next?`距${next.label} ${remaining} m`:`距结算点 ${remaining} m`}<br>速度 ${state.speed.toFixed(1)} km/h · 当前得分 ${summary.score}`;
@@ -1068,7 +1098,7 @@ function renderSmoothStartPanel(state){
   const startedCars=Math.min(state.consistCars||12,Math.round((state.wholeTrainStartFraction||0)*(state.consistCars||12)));
   const setText=(id,value)=>{const element=$(id);if(element)element.textContent=value;};
   if(state.trainingScope==='call-response'){
-    const current=callResponseAssessment.current(state);const next=current?.config||CALL_RESPONSE_TRAINING_CONFIG.events.find((config)=>state.callResponse.events[config.id].status==='pending');
+    const current=callResponseAssessment.current(state);const next=current?.config||CALL_RESPONSE_TRAINING_CONFIG.events.find((config)=>['pending','armed'].includes(state.callResponse.events[config.id].status));
     const summary=scoreCallResponseAttempt(state.callResponse);
     setText('#metric-speed',`${state.speed.toFixed(1)} km/h`);
     setText('#metric-traction',state.traction>0?`${state.traction.toFixed(1)}级`:state.traction<0?`电制动${Math.abs(state.traction).toFixed(1)}级`:'零位');
@@ -1077,7 +1107,7 @@ function renderSmoothStartPanel(state){
     setText('#metric-jerk',state.independentBrake===0?'缓解位':state.independentBrake===5?'全制位':`${state.independentBrake}档`);
     setText('#metric-context-label',current?'当前呼唤点':'下一呼唤点');
     setText('#metric-lkj',next?`${next.signalId} · ${Math.max(0,Math.round(next.distance-state.distance))} m`:'训练完成');
-    const items=CALL_RESPONSE_TRAINING_CONFIG.events.map((config)=>{const event=state.callResponse.events[config.id];const done=['correct','wrong','missed'].includes(event.status);const detail=event.status==='correct'?`正确 · ${event.earned}/${config.weight}分`:event.status==='wrong'?`错误 · 0/${config.weight}分`:event.status==='missed'?`漏答 · 0/${config.weight}分`:event.status==='active'?`${event.role==='driver'?'操纵司机':'非操纵司机'}内容选择中`:state.trainingMode==='assessment'?`到达有效区间后操作：${config.label}`:'到达呼唤点自动冻结';return [config.label,done,detail,event.status==='active'];});
+    const items=CALL_RESPONSE_TRAINING_CONFIG.events.map((config)=>{const event=state.callResponse.events[config.id];const done=['correct','wrong','missed'].includes(event.status);const detail=event.status==='correct'?`正确 · ${event.earned}/${config.weight}分`:event.status==='wrong'?`错误 · 0/${config.weight}分`:event.status==='missed'?`漏答 · 0/${config.weight}分`:event.status==='armed'?'已确认合电标，等待越过后呼唤':event.status==='active'?`${event.role==='driver'?'操纵司机':'非操纵司机'}内容选择中`:state.trainingMode==='assessment'?`到达有效区间后操作：${config.label}`:'到达呼唤点自动冻结';return [config.label,done,detail,['active','armed'].includes(event.status)];});
     const guide=$('#smooth-guide');if(guide){const signature=JSON.stringify(items);if(guide.dataset.signature!==signature){guide.dataset.signature=signature;guide.innerHTML=items.map(([label,done,detail,activeNow],index)=>`<li class="${done?'done':activeNow?'active':''}"><b>${index+1}. ${label}</b><span>${detail}</span></li>`).join('');}}
     const coach=$('#coach-progress');if(coach){coach.style.width=`${Math.round((summary.correct+summary.wrong+summary.missed)/CALL_RESPONSE_TRAINING_CONFIG.events.length*100)}%`;coach.parentElement?.classList.toggle('complete',Boolean(state.callResponse.finished));}
     return;

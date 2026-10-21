@@ -5,12 +5,12 @@ export const CALL_RESPONSE_ROLES = Object.freeze({
 
 const DRIVER_DISTRACTORS = Object.freeze([
   '绿灯', '绿黄灯', '黄灯，减速', '红灯，停车', '绿灯，出站好了',
-  '正点开车', '后部好了', '对标好了', '各仪表显示正常', '尾部风压600千帕',
+  '联控发车好了', '正点开车', '后部好了', '对标好了', '各仪表显示正常', '尾部风压600千帕',
   '单弓好了', '断电好了', '闭合好了', '车位正确', '黄灯，正线',
 ]);
 
 const ASSISTANT_DISTRACTORS = Object.freeze([
-  '出站信号', '通过信号', '进站信号', '确认开车时刻', '后部注意',
+  '出站信号', '发车信号', '通过信号', '进站信号', '确认开车时刻', '后部注意',
   '注意对标', '仪表注意', '列尾查询', '禁止双弓', '断电', '闭合', '确认车位',
 ]);
 
@@ -29,38 +29,47 @@ const callEvent = (definition) => {
 export const CALL_RESPONSE_TRAINING_CONFIG = Object.freeze({
   title: 'HXD1C两站一区间确认呼唤（应答）训练',
   routeLabel: '始发站—前方站 · 两站一区间',
-  finishDistance: 6750,
+  finishDistance: 6900,
   teachingFeedbackSeconds: 3,
   events: Object.freeze([
     callEvent({
       id: 'departure', targetKind: 'signal', targetId: 'departure', signalId: '6119',
-      label: '始发站6119出站信号机', distance: 454.14,
-      teachingTriggerDistance: 315, clickStartDistance: 120,
-      aspect: 'green', driverText: '绿灯，出站好了', assistantText: '出站信号', repeatText: '绿灯，出站好了', weight: 8,
+      label: '发车前6119出站信号确认', distance: 0, triggerKind: 'stationary',
+      teachingTriggerDistance: 0, clickStartDistance: 0, expireDistance: 8,
+      aspect: 'green', driverText: '绿灯，出站好了', assistantText: '出站信号', repeatText: '绿灯，出站好了', weight: 6,
     }),
     callEvent({
-      id: 'departure-time', targetKind: 'cab', targetId: 'cab-clock', signalId: '时刻',
-      label: '起动后确认开车时刻', distance: 620,
-      driverText: '正点开车', assistantText: '确认开车时刻', repeatText: '好了', weight: 4,
+      id: 'departure-ready', targetKind: 'signal', targetId: 'departure', signalId: '发车信号',
+      label: '发车前联控发车状态确认', distance: 0, triggerKind: 'stationary',
+      teachingTriggerDistance: 0, clickStartDistance: 0, expireDistance: 8,
+      driverText: '联控发车好了', assistantText: '发车信号', repeatText: '联控发车好了', weight: 4,
     }),
     callEvent({
       id: 'rear-lookout', targetKind: 'view', targetId: 'rear-view', signalId: '后部',
-      label: '起动列车后部瞭望', distance: 780,
+      label: '起动后2.0级后部瞭望', distance: 90, triggerKind: 'traction-moving',
+      teachingTriggerDistance: 0, clickStartDistance: 0, expireDistance: 520,
       driverText: '后部好了', assistantText: '后部注意', repeatText: '后部好了', weight: 4,
     }),
     callEvent({
+      id: 'departure-time', targetKind: 'cab', targetId: 'cab-clock', signalId: '时刻',
+      label: '通过出站信号机前确认开车时刻', distance: 385,
+      teachingTriggerDistance: 330, clickStartDistance: 285, expireDistance: 445,
+      driverText: '正点开车', assistantText: '确认开车时刻', repeatText: '好了', weight: 4,
+    }),
+    callEvent({
       id: 'departure-align', targetKind: 'cab', targetId: 'lkj', signalId: '对标',
-      label: '出站开车对标', distance: 940,
+      label: '6119出站信号机处注意对标', distance: 454.14,
+      teachingTriggerDistance: 430, clickStartDistance: 400, expireDistance: 520,
       driverText: '对标好了', assistantText: '注意对标', repeatText: '好了', weight: 4,
     }),
     callEvent({
       id: 'instrument-check', targetKind: 'cab', targetId: 'cab-instruments', signalId: '仪表',
-      label: '出站后仪表确认', distance: 1090,
+      label: '出站后仪表确认', distance: 720,
       driverText: '各仪表显示正常', assistantText: '仪表注意', repeatText: '', weight: 5,
     }),
     callEvent({
       id: 'departure-tail-pressure', targetKind: 'cab', targetId: 'cir', signalId: '列尾',
-      label: '出站后列尾查询', distance: 1260,
+      label: '停车站出站后列尾查询', distance: 930,
       driverText: '尾部风压600千帕', assistantText: '列尾查询', repeatText: '好了', weight: 5,
     }),
     callEvent({
@@ -77,37 +86,46 @@ export const CALL_RESPONSE_TRAINING_CONFIG = Object.freeze({
     }),
     callEvent({
       id: 'phase-power-on', targetKind: 'route-sign', targetId: 'phase-power-on', signalId: '合电',
-      label: '越过分相合电标', distance: 1729.1,
-      clickStartDistance: 1640, teachingTriggerDistance: 1685, expireDistance: 1765,
+      label: '越过分相合电标后', distance: 1729.1,
+      clickStartDistance: 1645, teachingTriggerDistance: 1738, deferUntilDistance: 1738, expireDistance: 1795,
       driverText: '闭合好了', assistantText: '闭合', repeatText: '好了', weight: 5,
     }),
     ...[
-      ['2328', 1800], ['2316', 2800], ['2302', 3800], ['2288', 4800], ['2274', 5800],
-    ].map(([id, distance]) => callEvent({
+      ['2328', 2100, 'green', '绿灯', ['绿黄灯', '黄灯，减速', '红灯，停车'], ['出站信号', '进站信号', '预告信号']],
+      ['2316', 3100, 'green', '绿灯', ['双黄灯，侧线', '黄灯，减速', '红灯，停车'], ['进站信号', '遮断信号', '出站信号']],
+      ['2302', 4100, 'green', '绿灯', ['绿黄灯', '双黄灯，侧线', '黄灯，减速'], ['预告信号', '进路信号', '出站信号']],
+      ['2288', 5100, 'green', '绿灯', ['红灯，停车', '黄灯，减速', '双黄灯，侧线'], ['进站信号', '复示信号', '发车信号']],
+      ['2274', 6100, 'greenYellow', '绿黄灯', ['绿灯', '黄灯，减速', '红灯，停车'], ['进站信号', '预告信号', '确认车位']],
+    ].map(([id, distance, aspect, driverText, driverDistractors, assistantDistractors]) => callEvent({
       id, targetKind: 'signal', targetId: id, signalId: id,
-      label: `${id}通过信号机`, distance, aspect: 'green',
-      driverText: '绿灯', assistantText: '通过信号', repeatText: '绿灯', weight: 5,
+      label: `${id}通过信号机`, distance, aspect,
+      teachingTriggerDistance: distance - 260, clickStartDistance: distance - 360, expireDistance: distance + 35,
+      driverText, assistantText: '通过信号', repeatText: driverText,
+      driverDistractors, assistantDistractors, weight: 5,
     })),
     callEvent({
       id: 'pre-entry-position', targetKind: 'cab', targetId: 'lkj', signalId: '车位',
-      label: '进站信号前确认车位', distance: 6070,
+      label: '越过进站前一架通过信号机确认车位', distance: 6145,
+      teachingTriggerDistance: 6145, clickStartDistance: 6100, expireDistance: 6230,
       driverText: '车位正确', assistantText: '确认车位', repeatText: '车位正确', weight: 5,
     }),
     callEvent({
-      id: 'arrival-entry', targetKind: 'signal', targetId: 'arrival-entry', signalId: 'X2',
-      label: '前方站X2进站信号机', distance: 6380,
-      teachingTriggerDistance: 6345, clickStartDistance: 6250, expireDistance: 6415,
-      aspect: 'yellow', driverText: '黄灯，正线', assistantText: '进站信号', repeatText: '黄灯，正线', weight: 10,
-    }),
-    callEvent({
       id: 'entry-tail-pressure', targetKind: 'cab', targetId: 'cir', signalId: '列尾',
-      label: '进站信号机前列尾查询', distance: 6470,
+      label: '进站信号机前列尾查询', distance: 6350,
+      teachingTriggerDistance: 6310, clickStartDistance: 6250, expireDistance: 6410,
       driverText: '尾部风压600千帕', assistantText: '列尾查询', repeatText: '好了', weight: 5,
     }),
     callEvent({
+      id: 'arrival-entry', targetKind: 'signal', targetId: 'arrival-entry', signalId: 'X2',
+      label: '前方站X2进站信号机', distance: 6700,
+      teachingTriggerDistance: 6440, clickStartDistance: 6350, expireDistance: 6735,
+      aspect: 'yellow', driverText: '黄灯，正线', assistantText: '进站信号', repeatText: '黄灯，正线', weight: 10,
+    }),
+    callEvent({
       id: 'station-position', targetKind: 'cab', targetId: 'lkj', signalId: '车位',
-      label: '越过进站信号机确认车位', distance: 6600,
-      driverText: '车位正确', assistantText: '确认车位', repeatText: '好了', weight: 10,
+      label: '越过X2进站信号机时确认车位', distance: 6708,
+      teachingTriggerDistance: 6708, clickStartDistance: 6685, expireDistance: 6770,
+      driverText: '车位正确', assistantText: '确认车位', repeatText: '好了', weight: 8,
     }),
   ]),
   driverDistractors: DRIVER_DISTRACTORS,

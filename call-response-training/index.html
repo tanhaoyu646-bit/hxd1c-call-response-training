@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="./styles/smooth-start.css?rev=call-response-v1">
   <link rel="stylesheet" href="./styles/credential-training.css?rev=call-response-v1">
   <link rel="stylesheet" href="./styles/continuity-test.css?rev=call-response-v1">
-  <link rel="stylesheet" href="./styles/call-response-training.css?rev=call-response-v2">
+  <link rel="stylesheet" href="./styles/call-response-training.css?rev=call-response-v3">
 </head>
 <body data-training-app="call-response">
   <div id="landscape-gate" class="landscape-gate" hidden aria-modal="true" role="dialog">
@@ -38,13 +38,14 @@
           <div class="call-response-body">
             <p data-call-signal>信号机</p>
             <h2 data-call-prompt>请选择标准呼唤内容</h2>
+            <button type="button" class="call-response-audio" data-call-audio hidden>播放呼唤语音</button>
             <div class="call-response-options" data-call-options></div>
             <p class="call-response-feedback" data-call-feedback></p>
           </div>
         </section>
 
         <div class="stage-toolbar">
-          <button id="workflow-toggle" type="button" aria-controls="workflow-drawer">训练进度 <b data-workflow-progress>0/18</b></button>
+          <button id="workflow-toggle" type="button" aria-controls="workflow-drawer">训练进度 <b data-workflow-progress>0/19</b></button>
           <button id="training-toggle" type="button" aria-controls="training-drawer">模式设置</button>
           <button id="view-toggle" class="view-toggle" type="button" aria-controls="mobile-view-tabs" aria-expanded="false">视角</button>
           <button id="metrics-toggle" class="metrics-toggle" type="button" aria-controls="smooth-training-panel" aria-expanded="false">运行数据</button>
@@ -94,6 +95,6 @@
   </main>
 
   <button id="workflow-scrim" class="drawer-backdrop workflow-scrim" type="button" aria-label="关闭侧栏"></button>
-  <script type="module" src="./scripts/archive-2d-cabview-real-route.js?rev=call-response-v2"></script>
+  <script type="module" src="./scripts/archive-2d-cabview-real-route.js?rev=call-response-v3"></script>
 </body>
 </html>
