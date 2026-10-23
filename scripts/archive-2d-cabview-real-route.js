@@ -1,14 +1,14 @@
 import { TrainSimulation } from './dynamics.js?rev=notch-timing-v30';
 import { getProcedure, procedureState, scoreRun } from './procedure.js?rev=notch-timing-v30';
-import { MstsRouteScene } from './mstsRouteScene.js?rev=call-response-v3';
+import { MstsRouteScene } from './mstsRouteScene.js?rev=call-response-v4';
 import { LKJ_FIELD_DEFINITIONS, LKJ_TRAINING_PARAMETERS, RUNNING_NOTICES, SIGNAL_ASPECTS, TRAIN_DYNAMICS, SMOOTH_START_TERRAINS, getSmoothStartTerrain } from './scenario.js?rev=notch-timing-v30';
 import { SCENARIOS, ROUTE_CONTEXT, getScenario, scenarioAudioPath } from './credentialScenario.js?rev=smooth-start-v19-cir-incoming-clickfix';
 import { ROUTE_TRAINING_PROFILE } from './routeTrainingProfile.js';
 import { LookoutAssessment } from './lookoutAssessment.js';
 import { LOOKOUT_TRAINING_CONFIG } from './lookoutTrainingConfig.js';
-import { CallResponseAssessment, scoreCallResponseAttempt } from './callResponseAssessment.js?rev=call-response-v3';
-import { CALL_RESPONSE_ROLES, CALL_RESPONSE_TRAINING_CONFIG, expectedCallResponseText, rolePrompt } from './callResponseConfig.js?rev=call-response-v3';
-import { playCallResponseSequence, stopCallResponseAudio } from './callResponseAudio.js?rev=call-response-v3';
+import { CallResponseAssessment, scoreCallResponseAttempt } from './callResponseAssessment.js?rev=call-response-v4';
+import { CALL_RESPONSE_ROLES, CALL_RESPONSE_TRAINING_CONFIG, expectedCallResponseText, rolePrompt } from './callResponseConfig.js?rev=call-response-v4';
+import { playCallResponseSequence, stopCallResponseAudio } from './callResponseAudio.js?rev=call-response-v4';
 
 const $ = (q) => document.querySelector(q);
 const sim = new TrainSimulation();

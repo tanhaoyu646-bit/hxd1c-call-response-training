@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   CallResponseAssessment,
   createCallResponseAttempt,
@@ -21,6 +21,24 @@ const makeState = (mode) => ({
   speed: 0,
   traction: 0,
 });
+
+function wavDurationSeconds(fileUrl) {
+  const buffer = readFileSync(fileUrl);
+  assert.equal(buffer.toString('ascii', 0, 4), 'RIFF');
+  assert.equal(buffer.toString('ascii', 8, 12), 'WAVE');
+  let offset = 12;
+  let byteRate = 0;
+  let dataBytes = 0;
+  while (offset + 8 <= buffer.length) {
+    const id = buffer.toString('ascii', offset, offset + 4);
+    const size = buffer.readUInt32LE(offset + 4);
+    if (id === 'fmt ') byteRate = buffer.readUInt32LE(offset + 16);
+    if (id === 'data') { dataBytes = size; break; }
+    offset += 8 + size + (size % 2);
+  }
+  assert(byteRate > 0 && dataBytes > 0, `invalid WAV chunks: ${fileUrl}`);
+  return dataBytes / byteRate;
+}
 
 {
   const attempt = createCallResponseAttempt(() => 0.25);
@@ -45,7 +63,10 @@ const makeState = (mode) => ({
     for (const line of fullCallResponseSequence(config)) {
       const file = callResponseAudioFile(line);
       assert.ok(file, `missing audio mapping for ${line.role}: ${line.text}`);
-      assert.ok(existsSync(new URL(`../assets/audio/call-response/${file}`, import.meta.url)), `missing audio file ${file}`);
+      const fileUrl = new URL(`../assets/audio/call-response/${file}`, import.meta.url);
+      assert.ok(existsSync(fileUrl), `missing audio file ${file}`);
+      const duration = wavDurationSeconds(fileUrl);
+      assert(duration >= 1 && duration <= 8, `invalid audio duration ${duration.toFixed(2)}s: ${file}`);
     }
   }
 }
@@ -65,8 +86,17 @@ const makeState = (mode) => ({
   assert.equal(answered.correct, false);
   assert.equal(event.earned, 0);
   assert.equal(assessment.isFrozen(state), true);
+  assert.equal(state.callResponse.feedbackPending, true);
+
+  // 模拟教师在第一题面板上讲解20秒后才作答；在结果和整段语音反馈尚未结束前，
+  // 相同位置的下一题不得被后台提前打开。
+  state.elapsed = 20;
+  assert.equal(assessment.update(state), null);
+  assert.equal(state.callResponse.events[CALL_RESPONSE_TRAINING_CONFIG.events[1].id].status, 'pending');
   assessment.completeTeachingFeedback(state);
   assert.equal(assessment.isFrozen(state), false);
+  assert.equal(state.callResponse.feedbackPending, false);
+  assert.equal(assessment.update(state).config.id, CALL_RESPONSE_TRAINING_CONFIG.events[1].id);
 }
 
 {

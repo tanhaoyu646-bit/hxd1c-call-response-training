@@ -60,6 +60,7 @@ function playRecordedLine(item, sequenceId) {
     activeAudio = audio;
     audio.preload = 'auto';
     let settled = false;
+    let timeout = setTimeout(() => finish(false), 20000);
     const finish = (value) => {
       if (settled) return;
       settled = true;
@@ -67,10 +68,15 @@ function playRecordedLine(item, sequenceId) {
       if (activeAudio === audio) activeAudio = null;
       resolve(value);
     };
-    const timeout = setTimeout(() => finish(false), 9000);
     audio.onended = () => finish(sequenceId === activeSequence);
     audio.onerror = () => finish(false);
-    audio.play().catch(() => finish(false));
+    audio.play().then(() => {
+      // 首次进页面时音频可能和三维资源竞争网络连接。加载阶段给足20秒；真正
+      // 开始播放后再按文件时长设置看门狗，避免固定9秒把慢网下的句子截断。
+      clearTimeout(timeout);
+      const durationMs = Number.isFinite(audio.duration) ? audio.duration * 1000 : 8000;
+      timeout = setTimeout(() => finish(false), Math.max(5000, durationMs + 2500));
+    }).catch(() => finish(false));
   });
 }
 
@@ -104,10 +110,12 @@ export async function playCallResponseSequence(sequence) {
   const sequenceId = activeSequence;
   if (activeAudio) { activeAudio.pause(); activeAudio = null; }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
-  for (const item of sequence) {
+  for (const [index, item] of sequence.entries()) {
     if (sequenceId !== activeSequence) return false;
     const recorded = await playRecordedLine(item, sequenceId);
     if (!recorded && !await speakLine(item, sequenceId)) return false;
+    // 留出很短的角色交接间隔，防止浏览器紧邻切换两个文件时吞掉上一句尾音。
+    if (index < sequence.length - 1) await new Promise((resolve) => setTimeout(resolve, 140));
   }
   return sequenceId === activeSequence;
 }

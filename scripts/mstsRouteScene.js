@@ -2,7 +2,7 @@ import * as THREE from '../lib/three/three.module.js';
 import { ROUTE_CONTEXT } from './smoothStartConfig.js';
 import { buildRailAlignedPath, cumulativePathDistances } from './railAlignedPath.js';
 import { LOOKOUT_TRAINING_CONFIG } from './lookoutTrainingConfig.js';
-import { CALL_RESPONSE_TRAINING_CONFIG } from './callResponseConfig.js?rev=call-response-v3';
+import { CALL_RESPONSE_TRAINING_CONFIG } from './callResponseConfig.js?rev=call-response-v4';
 
 // fetch() 的相对地址以页面而非当前模块为基准；GitHub Pages 位于仓库子目录，
 // 因此所有三维资源必须相对 import.meta.url 解析，不能使用普通 ../assets 字符串。
@@ -13,6 +13,31 @@ const LOOKOUT_TERRAIN_PATH = new URL('../assets/msts-neiyi-corridor/neiyi-lookou
 const LOOKOUT_PREFAB_PATH = new URL('../assets/msts-neiyi-corridor/lookout-source-prefabs.json', import.meta.url).href;
 const LOOKOUT_REPAIR_ASSET_PATH = new URL('../assets/msts-neiyi-corridor/lookout-repair-assets.json', import.meta.url).href;
 const TEXTURE_PATH = new URL('../assets/msts-neiyi-corridor/textures/', import.meta.url).href;
+
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function fetchJsonWithRetry(url, label, attempts = 3) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000 + attempt * 5000);
+    try {
+      // GitHub Pages 已为这些静态资源提供10分钟边缘/浏览器缓存。原来的
+      // no-store 会强制每次刷新都重下约6.7 MB原始JSON，课堂集中登录时没有必要。
+      const response = await fetch(url, { cache: 'default', signal: controller.signal });
+      if (!response.ok) throw new Error(`${label}加载失败：HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      lastError = error?.name === 'AbortError'
+        ? new Error(`${label}加载超时`)
+        : error;
+      if (attempt < attempts) await wait(350 * (2 ** (attempt - 1)));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw lastError || new Error(`${label}加载失败`);
+}
 // GitHub Pages 区分大小写；原游戏导出中的三处引用大小写与发布文件名不同。
 const TEXTURE_FILE_ALIASES = Object.freeze({
   'acleanttrack1.png': 'ACleanTrack1.png',
@@ -120,27 +145,15 @@ export class MstsRouteScene {
   async load() {
     try {
       const requests = [
-        fetch(SOURCE_PATH, { cache: 'no-store' }),
-        fetch(ROUTE_PATH, { cache: 'no-store' }),
-        fetch(this.isLookout ? LOOKOUT_TERRAIN_PATH : TERRAIN_PATH, { cache: 'no-store' }),
+        fetchJsonWithRetry(SOURCE_PATH, '路线场景'),
+        fetchJsonWithRetry(ROUTE_PATH, '轨道中心线'),
+        fetchJsonWithRetry(this.isLookout ? LOOKOUT_TERRAIN_PATH : TERRAIN_PATH, '原线路地形'),
       ];
       if (this.isLookout) {
-        requests.push(fetch(LOOKOUT_PREFAB_PATH, { cache: 'no-store' }));
-        requests.push(fetch(LOOKOUT_REPAIR_ASSET_PATH, { cache: 'no-store' }));
+        requests.push(fetchJsonWithRetry(LOOKOUT_PREFAB_PATH, '原线路道口素材'));
+        requests.push(fetchJsonWithRetry(LOOKOUT_REPAIR_ASSET_PATH, '原游戏补充素材'));
       }
-      const [sceneResponse, pathResponse, terrainResponse, prefabResponse, repairAssetResponse] = await Promise.all(requests);
-      if (!sceneResponse.ok) throw new Error(`路线场景加载失败：HTTP ${sceneResponse.status}`);
-      if (!pathResponse.ok) throw new Error(`轨道中心线加载失败：HTTP ${pathResponse.status}`);
-      if (!terrainResponse.ok) throw new Error(`原线路地形加载失败：HTTP ${terrainResponse.status}`);
-      if (this.isLookout && !prefabResponse?.ok) throw new Error(`原线路道口素材加载失败：HTTP ${prefabResponse?.status}`);
-      if (this.isLookout && !repairAssetResponse?.ok) throw new Error(`原游戏补充素材加载失败：HTTP ${repairAssetResponse?.status}`);
-      const [sceneData, pathData, terrainData, prefabData, repairAssetData] = await Promise.all([
-        sceneResponse.json(),
-        pathResponse.json(),
-        terrainResponse.json(),
-        prefabResponse?.json() || null,
-        repairAssetResponse?.json() || null,
-      ]);
+      const [sceneData, pathData, terrainData, prefabData, repairAssetData] = await Promise.all(requests);
       if (repairAssetData?.shapes?.['tongguo.s']) {
         repairAssetData.shapes['tongguo.s'].materials.forEach((material) => {
           if (material.texture === 'Sign.png') material.texture = 'throughSignalSign.png';

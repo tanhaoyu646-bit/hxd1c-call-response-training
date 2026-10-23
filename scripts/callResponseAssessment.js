@@ -5,7 +5,7 @@ import {
   expectedCallResponseText,
   fullCallResponseSequence,
   getCallResponseEvent,
-} from './callResponseConfig.js?rev=call-response-v3';
+} from './callResponseConfig.js?rev=call-response-v4';
 
 function shuffled(values, random = Math.random) {
   const result = [...values];
@@ -36,6 +36,7 @@ export function createCallResponseAttempt(random = Math.random) {
   return {
     activeEventId: null,
     frozen: false,
+    feedbackPending: false,
     finished: false,
     resultShown: false,
     misclicks: 0,
@@ -100,6 +101,7 @@ export class CallResponseAssessment {
       ? state.elapsed + config.answerWindowSeconds
       : null;
     state.callResponse.activeEventId = config.id;
+    state.callResponse.feedbackPending = false;
     state.callResponse.frozen = state.trainingMode === 'teaching';
     return { type: 'open', config, event };
   }
@@ -175,6 +177,7 @@ export class CallResponseAssessment {
     event.status = event.correct ? 'correct' : 'wrong';
     event.answeredAtDistance = state.distance;
     state.callResponse.activeEventId = null;
+    state.callResponse.feedbackPending = state.trainingMode === 'teaching';
     if (state.trainingMode !== 'teaching') state.callResponse.frozen = false;
     return {
       type: 'answer',
@@ -190,6 +193,7 @@ export class CallResponseAssessment {
 
   completeTeachingFeedback(state) {
     if (!state?.callResponse) return;
+    state.callResponse.feedbackPending = false;
     state.callResponse.frozen = false;
   }
 
@@ -200,6 +204,7 @@ export class CallResponseAssessment {
     event.correct = false;
     event.earned = 0;
     if (state.callResponse.activeEventId === config.id) state.callResponse.activeEventId = null;
+    state.callResponse.feedbackPending = false;
     state.callResponse.frozen = false;
     return { type: 'missed', config, event, message: `${config.label}未在规定区间完成呼唤，已记录失分。` };
   }
@@ -215,6 +220,11 @@ export class CallResponseAssessment {
       }
       return null;
     }
+
+    // 教学模式作答后还要播放完整反馈语音并展示结果。该阶段不允许后台提前
+    // 激活下一题，否则旧题关闭面板时会把新题一起隐藏，留下“已激活但不可见”
+    // 的事件并永久阻塞后续呼唤。
+    if (state.callResponse.feedbackPending) return null;
 
     const armedConfig = CALL_RESPONSE_TRAINING_CONFIG.events.find((config) => (
       state.callResponse.events[config.id].status === 'armed'
