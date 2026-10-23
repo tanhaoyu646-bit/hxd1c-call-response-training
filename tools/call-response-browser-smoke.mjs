@@ -82,7 +82,7 @@ await evaluate(`new Promise((resolve,reject)=>{
     const state=window.__trainingSim.state;
     const current=window.__callResponseAssessment.current(state);
     const panel=document.querySelector('#call-response-panel');
-    const expected=current.event.role==='操纵司机'?current.config.driverText:current.config.assistantText;
+    const expected=current.event.role==='driver'?current.config.driverText:current.config.assistantText;
     const button=[...panel.querySelectorAll('[data-call-answer]')].find((item)=>item.textContent===expected);
     if(button&&!button.disabled){clearInterval(timer);button.click();resolve(true);}
     else if(button&&Date.now()-started>3000){
