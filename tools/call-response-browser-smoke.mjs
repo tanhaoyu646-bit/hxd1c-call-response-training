@@ -120,7 +120,7 @@ const resourceSummary = await evaluate(`(()=>{
     audioDurations:audio.map((item)=>Math.round(item.duration)),
   };
 })()`);
-assert(resourceSummary.jsonRequests >= 5, '三维场景核心JSON请求数量异常');
+assert.equal(resourceSummary.jsonRequests, 1, '呼唤应答三维场景核心数据应合并为1个请求');
 assert(resourceSummary.audioRequests >= 1, '呼唤应答语音没有发起加载');
 assert.deepEqual(errors, []);
 assert.deepEqual(networkErrors, []);

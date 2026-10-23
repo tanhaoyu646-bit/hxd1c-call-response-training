@@ -12,6 +12,7 @@ const TERRAIN_PATH = new URL('../assets/msts-neiyi-corridor/neiyi-lookout-terrai
 const LOOKOUT_TERRAIN_PATH = new URL('../assets/msts-neiyi-corridor/neiyi-lookout-terrain-native.json', import.meta.url).href;
 const LOOKOUT_PREFAB_PATH = new URL('../assets/msts-neiyi-corridor/lookout-source-prefabs.json', import.meta.url).href;
 const LOOKOUT_REPAIR_ASSET_PATH = new URL('../assets/msts-neiyi-corridor/lookout-repair-assets.json', import.meta.url).href;
+const CALL_RESPONSE_BUNDLE_PATH = new URL('../assets/msts-neiyi-corridor/call-response-scene-bundle.json', import.meta.url).href;
 const TEXTURE_PATH = new URL('../assets/msts-neiyi-corridor/textures/', import.meta.url).href;
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -144,16 +145,28 @@ export class MstsRouteScene {
 
   async load() {
     try {
-      const requests = [
-        fetchJsonWithRetry(SOURCE_PATH, '路线场景'),
-        fetchJsonWithRetry(ROUTE_PATH, '轨道中心线'),
-        fetchJsonWithRetry(this.isLookout ? LOOKOUT_TERRAIN_PATH : TERRAIN_PATH, '原线路地形'),
-      ];
-      if (this.isLookout) {
-        requests.push(fetchJsonWithRetry(LOOKOUT_PREFAB_PATH, '原线路道口素材'));
-        requests.push(fetchJsonWithRetry(LOOKOUT_REPAIR_ASSET_PATH, '原游戏补充素材'));
+      let sceneData;
+      let pathData;
+      let terrainData;
+      let prefabData = null;
+      let repairAssetData = null;
+      if (this.isCallResponse) {
+        // 呼唤应答课堂会有大量学生同时冷启动。把5份核心JSON合成1个请求，
+        // 避免同一校园出口瞬间建立“学生数×5”的GitHub Pages连接。
+        const bundle = await fetchJsonWithRetry(CALL_RESPONSE_BUNDLE_PATH, '呼唤应答线路资源');
+        ({ scene: sceneData, path: pathData, terrain: terrainData, prefab: prefabData, repairAsset: repairAssetData } = bundle);
+      } else {
+        const requests = [
+          fetchJsonWithRetry(SOURCE_PATH, '路线场景'),
+          fetchJsonWithRetry(ROUTE_PATH, '轨道中心线'),
+          fetchJsonWithRetry(this.isLookout ? LOOKOUT_TERRAIN_PATH : TERRAIN_PATH, '原线路地形'),
+        ];
+        if (this.isLookout) {
+          requests.push(fetchJsonWithRetry(LOOKOUT_PREFAB_PATH, '原线路道口素材'));
+          requests.push(fetchJsonWithRetry(LOOKOUT_REPAIR_ASSET_PATH, '原游戏补充素材'));
+        }
+        [sceneData, pathData, terrainData, prefabData, repairAssetData] = await Promise.all(requests);
       }
-      const [sceneData, pathData, terrainData, prefabData, repairAssetData] = await Promise.all(requests);
       if (repairAssetData?.shapes?.['tongguo.s']) {
         repairAssetData.shapes['tongguo.s'].materials.forEach((material) => {
           if (material.texture === 'Sign.png') material.texture = 'throughSignalSign.png';

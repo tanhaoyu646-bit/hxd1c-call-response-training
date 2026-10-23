@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check scripts/credentialScenario.js && node --check scripts/scenario.js && node --check scripts/routeTrainingProfile.js && node --check scripts/callResponseConfig.js && node --check scripts/callResponseAssessment.js && node --check scripts/callResponseAudio.js && node --check scripts/railAlignedPath.js && node --check scripts/dynamics.js && node --check scripts/procedure.js && node --check scripts/mstsRouteScene.js && node --check scripts/archive-2d-cabview-real-route.js && node tools/test-call-response-assessment.mjs && node tools/test-interface-assets.mjs && node tools/test-route-extension.mjs"
+    "check": "node --check scripts/credentialScenario.js && node --check scripts/scenario.js && node --check scripts/routeTrainingProfile.js && node --check scripts/callResponseConfig.js && node --check scripts/callResponseAssessment.js && node --check scripts/callResponseAudio.js && node --check scripts/railAlignedPath.js && node --check scripts/dynamics.js && node --check scripts/procedure.js && node --check scripts/mstsRouteScene.js && node --check scripts/archive-2d-cabview-real-route.js && node tools/test-call-response-assessment.mjs && node tools/test-call-response-scene-bundle.mjs && node tools/test-interface-assets.mjs && node tools/test-route-extension.mjs"
   }
 }
 
